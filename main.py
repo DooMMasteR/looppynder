@@ -3,8 +3,9 @@ import sqlite3
 from PIL import Image, ImageSequence
 import numpy as np
 import io
+import time
 
-
+start = time.time()
 def adapt_array(arr):
     out = io.BytesIO()
     np.save(out, arr)
@@ -36,32 +37,47 @@ for image in gif_seq:
     framecounter += 1
 
 print('Sequence has ' + str(framecounter) + ' frames.')
-
+print('Init took : ', str((time.time() - start)*1000), 'ms' )
+start = time.time()
 gif_seq = ImageSequence.Iterator(gif)
 counter = 0
+hashes = []
 for image in gif_seq:
     counter += 1
-    mem_de_cursor1.execute('INSERT INTO frame_data VALUES (?,?,?)',
-                           [counter, imagehash.phash(image, 24).hash, imagehash.dhash(image, 24).hash])
+    hashes.append([counter, imagehash.phash(image, 24).hash, imagehash.dhash(image, 24).hash])
+
+print('Hashing took : ', str((time.time() - start)*1000), 'ms' )
+
+mem_de_cursor1.executemany('INSERT INTO frame_data VALUES (?,?,?)',
+                           hashes)
+print('Hashing with insert took : ', str((time.time() - start)*1000), 'ms' )
+
+
+start = time.time()
 
 counter1 = 0
 diffmap = []
-mem_de_cursor1.execute('SELECT * FROM frame_data')
-for (id1, phash1, dhash1) in mem_de_cursor1:
+for (id1, phash1, dhash1) in hashes:
     counter2 = 0
     counter1 += 1
     mem_de_cursor2.execute('SELECT * FROM frame_data')
-    for (id2, phash2, dhash2) in mem_de_cursor2:
+    for (id2, phash2, dhash2) in hashes:
         counter2 += 1
         if counter1 >= counter2:
             continue
-        mem_db.execute("INSERT INTO matches VALUES (null, ?, ?, ?, ?)",
-                       [id1, id2, abs(imagehash.ImageHash(phash1) - imagehash.ImageHash(phash2)),
+        diffmap.append([id1, id2, abs(imagehash.ImageHash(phash1) - imagehash.ImageHash(phash2)),
                         abs(imagehash.ImageHash(dhash1) - imagehash.ImageHash(dhash2))])
+
+print('Making differences took : ', str((time.time() - start)*1000), 'ms' )
+
+mem_db.executemany("INSERT INTO matches VALUES (null, ?, ?, ?, ?)", diffmap)
+
+print('Making differences with insert took : ', str((time.time() - start)*1000), 'ms' )
+del diffmap
+del hashes
 
 mem_de_cursor1.execute(
     "SELECT * FROM (SELECT * FROM matches WHERE (end - start) > 10  AND (ddiff < 100 OR pdiff < 100) ORDER BY ddiff "
     "ASC, pdiff ASC LIMIT 25) ORDER BY ddiff DESC, pdiff DESC")
-
 for frame in mem_de_cursor1:
     print(frame)
