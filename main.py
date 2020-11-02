@@ -5,6 +5,7 @@ import numpy as np
 import io
 import time
 
+
 start = time.time()
 def adapt_array(arr):
     out = io.BytesIO()
@@ -18,11 +19,10 @@ def convert_array(text):
     out.seek(0)
     return np.load(out)
 
-
 sqlite3.register_adapter(np.ndarray, adapt_array)
 sqlite3.register_converter("array", convert_array)
 
-mem_db = sqlite3.connect("file::memory:?cache=shared", detect_types=sqlite3.PARSE_DECLTYPES)
+mem_db = sqlite3.connect("file::memory:?cache=shared", detect_types=sqlite3.PARSE_DECLTYPES, check_same_thread=False, uri=True)
 gif = Image.open('test.gif')
 gif_seq = ImageSequence.Iterator(gif)
 mem_db.execute('CREATE TABLE frame_data(id INTEGER PRIMARY KEY ASC, phash array, dhash array)')
@@ -77,7 +77,7 @@ del diffmap
 del hashes
 
 mem_de_cursor1.execute(
-    "SELECT * FROM (SELECT * FROM matches WHERE (end - start) > 10  AND (ddiff < 100 OR pdiff < 100) ORDER BY ddiff "
+    "SELECT * FROM (SELECT * FROM matches WHERE (end - start) > 10  AND (ddiff < 200 OR pdiff < 200) ORDER BY ddiff "
     "ASC, pdiff ASC LIMIT 25) ORDER BY ddiff DESC, pdiff DESC")
 for frame in mem_de_cursor1:
     print(frame)
